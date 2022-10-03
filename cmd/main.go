@@ -6,6 +6,7 @@ import (
 	"github.com/tinyzimmer/go-gst/examples"
 	"github.com/tinyzimmer/go-gst/gst"
 	"github.com/ziutek/glib"
+	"github.com/abdulhaseeb08/demoProject2"
 )
 
 func buildPipeline() (*gst.Pipeline, error) {

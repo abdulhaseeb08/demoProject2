@@ -1,4 +1,4 @@
-module github.com/abdulhaseeb08/demo
+module github.com/abdulhaseeb08/demoProject2
 
 go 1.18
 
