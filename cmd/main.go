@@ -12,6 +12,92 @@ import (
 	"github.com/tinyzimmer/go-gst/gst/app"
 )
 
+func buildAudioElements(pipeline *gst.Pipeline) ([]*gst.Element, error) {
+	elementsForAudio, err := gst.NewElementMany("openalsrc", "queue", "audioconvert", "audioresample", "audiorate", "capsfilter", "queue", "fdkaacenc", "queue", "tee")
+	if err != nil {
+		return nil, err
+	}
+
+	//Setting properties and caps
+	if err := elementsForAudio[5].SetProperty("caps", gst.NewCapsFromString(
+		"audio/x-raw, rate=48000, channels=2",
+	)); err != nil {
+		return nil, err
+	}
+	elementsForAudio[7].Set("bitrate", 128000)
+
+	pipeline.AddMany(elementsForAudio...)
+	//linking audio elements
+	gst.ElementLinkMany(elementsForAudio...)
+
+	return elementsForAudio, nil
+}
+
+func buildMux(pipeline *gst.Pipeline, name string) (*gst.Element, error) {
+	if name == "mp4mux" {
+		mux, err := gst.NewElement("mp4mux")
+		if err != nil {
+			return nil, err
+		}
+		pipeline.Add(mux)
+		return mux, nil
+	}
+
+	mux, err := gst.NewElement("flvmux")
+	if err != nil {
+		return nil, err
+	}
+	pipeline.Add(mux)
+	return mux, nil
+}
+
+func muxRequestPads(mux *gst.Element) (*gst.Pad, *gst.Pad) {
+	audioPad := mux.GetRequestPad("audio_%u")
+	if audioPad == nil {
+		audioPad = mux.GetRequestPad("audio")
+	}
+	videoPad := mux.GetRequestPad("video_%u")
+	if videoPad == nil {
+		videoPad = mux.GetRequestPad("video")
+	}
+
+	return audioPad, videoPad
+
+}
+
+func buildVideoElements(pipeline *gst.Pipeline) ([]*gst.Element, error) {
+	elementsForVideo, err := gst.NewElementMany("v4l2src", "queue", "videoconvert", "videorate", "videoscale", "capsfilter", "queue", "x264enc", "h264parse", "capsfilter", "queue", "tee")
+	if err != nil {
+		return nil, err
+	}
+
+	//Setting properties and caps
+	elementsForVideo[3].Set("silent", false)
+	if err := elementsForVideo[5].SetProperty("caps", gst.NewCapsFromString(
+		"video/x-raw, width=1280, height=720, framerate=30/1",
+	)); err != nil {
+		return nil, err
+	}
+
+	if err := elementsForVideo[9].SetProperty("caps", gst.NewCapsFromString(
+		"video/x-h264, profile=high",
+	)); err != nil {
+		return nil, err
+	}
+
+	elementsForVideo[7].Set("speed-preset", 3)
+	elementsForVideo[7].Set("tune", "zerolatency")
+	elementsForVideo[7].Set("bitrate", 2500)
+	elementsForVideo[7].Set("key-int-max", 100)
+
+	pipeline.AddMany(elementsForVideo...)
+	//linking video elements
+	gst.ElementLinkMany(elementsForVideo...)
+
+	return elementsForVideo, nil
+
+}
+
 func buildPipeline() (*gst.Pipeline, error) {
 	//initialize gstreamer
 	gst.Init(nil)
@@ -56,6 +142,7 @@ func buildPipeline() (*gst.Pipeline, error) {
 	if err != nil {
 		return nil, err
 	}
+	pipeline.AddMany(muxQueues...)
 	muxFileQueueAudio := muxQueues[0]
 	muxFileQueueVideo := muxQueues[1]
 	muxStreamQueueAudio := muxQueues[2]
